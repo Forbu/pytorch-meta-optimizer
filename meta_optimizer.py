@@ -151,12 +151,12 @@ class FastMetaOptimizer(nn.Module):
 
 class GraphMetaModel(nn.Module):
     def __init__(self, model, num_layers, hidden_size, dropout):
-        super(FastMetaOptimizer, self).__init__()
+        super(GraphMetaModel, self).__init__()
         self.meta_model = model
 
         # put here the graph neural network
         n_input = 5
-        self.graphConv = GCN(n_input, hidden_size, dropout)
+        self.graphConv = GCN(n_input, hidden_size, 2, dropout)
 
     def forward(self, x, adj):
         # Gradients preprocessing
@@ -177,7 +177,7 @@ class GraphMetaModel(nn.Module):
                 self.f = self.f.cuda()
                 self.i = self.i.cuda()
 
-    def meta_update(self, model_with_grads, loss, adj):
+    def meta_update(self, model_with_grads, adj):
         # First we need to create a flat version of parameters and gradients
         grads = []
 
@@ -191,9 +191,9 @@ class GraphMetaModel(nn.Module):
         self.i = self.i.expand(flat_params.size(0), 1)
         self.f = self.f.expand(flat_params.size(0), 1)
 
-        loss = loss.expand_as(flat_grads)
         inputs = Variable(torch.cat((preprocess_gradients(flat_grads), flat_params.data), 1))
         inputs = torch.cat((inputs, self.f, self.i), 1)
+        print("begin calculation")
         self.f, self.i = self(inputs, adj)
 
         # Meta update itself

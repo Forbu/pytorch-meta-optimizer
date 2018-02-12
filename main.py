@@ -56,12 +56,14 @@ def main():
     meta_model = Model()
     
     # we get the adjacent matrix
+    print("calculating the adjacent matrix of the network")
     adj_undirected, adjacent_matrix_directed_fw_, adjacent_matrix_directed_bw_ = get_adjacent_matrix(meta_model)
+    adj_undirected = Variable(adj_undirected)
     
     if args.cuda:
         meta_model.cuda()
 
-    meta_optimizer = GraphMetaModel(MetaModel(meta_model), args.num_layers, args.hidden_size)
+    meta_optimizer = GraphMetaModel(MetaModel(meta_model), args.num_layers, args.hidden_size,dropout=0.2)
     if args.cuda:
         meta_optimizer.cuda()
 
@@ -110,7 +112,7 @@ def main():
 
                     # Perfom a meta update using gradients from model
                     # and return the current meta model saved in the optimizer
-                    meta_model = meta_optimizer.meta_update(model, loss.data)
+                    meta_model = meta_optimizer.meta_update(model, adj_undirected)
 
                     # Compute a loss for a step the meta optimizer
                     f_x = meta_model(x)

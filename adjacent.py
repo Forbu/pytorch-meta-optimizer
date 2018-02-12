@@ -105,3 +105,4 @@ def get_adjacent_matrix(model_input):
 
     return adj_undirected, adjacent_matrix_directed_fw_, adjacent_matrix_directed_bw_
 
+
