@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from data import get_batch
-from meta_optimizer import MetaModel, MetaOptimizer, FastMetaOptimizer
+from meta_optimizer import MetaModel, MetaOptimizer, FastMetaOptimizer, GraphMetaModel
 from model import Model
 from torch.autograd import Variable
 from torchvision import datasets, transforms
@@ -20,9 +20,9 @@ parser.add_argument('--optimizer_steps', type=int, default=100, metavar='N',
                     help='number of meta optimizer steps (default: 100)')
 parser.add_argument('--truncated_bptt_step', type=int, default=20, metavar='N',
                     help='step at which it truncates bptt (default: 20)')
-parser.add_argument('--updates_per_epoch', type=int, default=100, metavar='N',
+parser.add_argument('--updates_per_epoch', type=int, default=10, metavar='N',
                     help='updates per epoch (default: 100)')
-parser.add_argument('--max_epoch', type=int, default=2, metavar='N',
+parser.add_argument('--max_epoch', type=int, default=100, metavar='N',
                     help='number of epoch (default: 10000)')
 parser.add_argument('--hidden_size', type=int, default=10, metavar='N',
                     help='hidden size of the meta optimizer (default: 10)')
@@ -55,10 +55,15 @@ def main():
     # to keep track of the meta updates.
     meta_model = Model()
     
+    # we get the adjacent matrix
+    print("calculating the adjacent matrix of the network")
+    adj_undirected, adjacent_matrix_directed_fw_, adjacent_matrix_directed_bw_ = get_adjacent_matrix(meta_model)
+    adj_undirected = Variable(adjacent_matrix_directed_fw_)
+    
     if args.cuda:
         meta_model.cuda()
 
-    meta_optimizer = FastMetaOptimizer(MetaModel(meta_model), args.num_layers, args.hidden_size)
+    meta_optimizer = GraphMetaModel(MetaModel(meta_model), args.num_layers, args.hidden_size,dropout=0.2)
     if args.cuda:
         meta_optimizer.cuda()
 
@@ -107,7 +112,7 @@ def main():
 
                     # Perfom a meta update using gradients from model
                     # and return the current meta model saved in the optimizer
-                    meta_model = meta_optimizer.meta_update(model, loss.data)
+                    meta_model = meta_optimizer.meta_update(model, adj_undirected)
 
                     # Compute a loss for a step the meta optimizer
                     f_x = meta_model(x)

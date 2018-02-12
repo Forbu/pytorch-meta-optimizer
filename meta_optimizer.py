@@ -193,7 +193,7 @@ class GraphMetaModel(nn.Module):
 
         inputs = Variable(torch.cat((preprocess_gradients(flat_grads), flat_params.data), 1))
         inputs = torch.cat((inputs, self.f, self.i), 1)
-        print("begin calculation")
+
         self.f, self.i = self(inputs, adj)
 
         # Meta update itself
