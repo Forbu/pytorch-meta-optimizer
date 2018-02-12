@@ -7,10 +7,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from data import get_batch
-from meta_optimizer import MetaModel, MetaOptimizer, FastMetaOptimizer
+from meta_optimizer import MetaModel, MetaOptimizer, FastMetaOptimizer, GraphMetaModel
 from model import Model
 from torch.autograd import Variable
 from torchvision import datasets, transforms
+from adjacent import get_adjacent_matrix
 
 parser = argparse.ArgumentParser(description='PyTorch REINFORCE example')
 parser.add_argument('--batch_size', type=int, default=32, metavar='N',
@@ -53,10 +54,14 @@ def main():
     # Create a meta optimizer that wraps a model into a meta model
     # to keep track of the meta updates.
     meta_model = Model()
+    
+    # we get the adjacent matrix
+    adj_undirected, adjacent_matrix_directed_fw_, adjacent_matrix_directed_bw_ = get_adjacent_matrix(meta_model)
+    
     if args.cuda:
         meta_model.cuda()
 
-    meta_optimizer = FastMetaOptimizer(MetaModel(meta_model), args.num_layers, args.hidden_size)
+    meta_optimizer = GraphMetaModel(MetaModel(meta_model), args.num_layers, args.hidden_size)
     if args.cuda:
         meta_optimizer.cuda()
 

@@ -7,9 +7,10 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.autograd import Variable
 import math
-from utils import preprocess_gradients
+from utils_ import preprocess_gradients
 from layer_norm_lstm import LayerNormLSTMCell
 from layer_norm import LayerNorm1D
+from GraphConvLayer import GCN
 
 class MetaOptimizer(nn.Module):
 
@@ -54,8 +55,9 @@ class MetaOptimizer(nn.Module):
 
     def forward(self, x):
         # Gradients preprocessing
+        print(self.hidden_size)
         x = F.tanh(self.ln1(self.linear1(x)))
-
+        
         for i in range(len(self.lstms)):
             if x.size(0) != self.hx[i].size(0):
                 self.hx[i] = self.hx[i].expand(x.size(0), self.hx[i].size(1))
@@ -81,6 +83,7 @@ class MetaOptimizer(nn.Module):
         inputs = Variable(torch.cat((flat_grads, flat_params.data), 1))
 
         # Meta update itself
+        
         flat_params = flat_params + self(inputs)
 
         self.meta_model.set_flat_params(flat_params)
@@ -146,11 +149,67 @@ class FastMetaOptimizer(nn.Module):
         self.meta_model.copy_params_to(model_with_grads)
         return self.meta_model.model
 
+class GraphMetaModel(nn.Module):
+    def __init__(self, model, num_layers, hidden_size, dropout):
+        super(FastMetaOptimizer, self).__init__()
+        self.meta_model = model
+
+        # put here the graph neural network
+        n_input = 5
+        self.graphConv = GCN(n_input, hidden_size, dropout)
+
+    def forward(self, x, adj):
+        # Gradients preprocessing
+        x = self.graphConv(x, adj)
+        return x.split(1, 1)
+
+    def reset_lstm(self, keep_states=False, model=None, use_cuda=False):
+        self.meta_model.reset()
+        self.meta_model.copy_params_from(model)
+
+        if keep_states:
+            self.f = Variable(self.f.data)
+            self.i = Variable(self.i.data)
+        else:
+            self.f = Variable(torch.zeros(1, 1))
+            self.i = Variable(torch.zeros(1, 1))
+            if use_cuda:
+                self.f = self.f.cuda()
+                self.i = self.i.cuda()
+
+    def meta_update(self, model_with_grads, loss, adj):
+        # First we need to create a flat version of parameters and gradients
+        grads = []
+
+        for module in model_with_grads.children():
+            grads.append(module._parameters['weight'].grad.data.view(-1))
+            grads.append(module._parameters['bias'].grad.data.view(-1))
+
+        flat_params = self.meta_model.get_flat_params()
+        flat_grads = torch.cat(grads)
+
+        self.i = self.i.expand(flat_params.size(0), 1)
+        self.f = self.f.expand(flat_params.size(0), 1)
+
+        loss = loss.expand_as(flat_grads)
+        inputs = Variable(torch.cat((preprocess_gradients(flat_grads), flat_params.data), 1))
+        inputs = torch.cat((inputs, self.f, self.i), 1)
+        self.f, self.i = self(inputs, adj)
+
+        # Meta update itself
+        flat_params = torch.t(self.f) * flat_params - torch.t(self.i) * Variable(flat_grads)
+        flat_params = flat_params.view(-1)
+
+        self.meta_model.set_flat_params(flat_params)
+
+        # Finally, copy values from the meta model to the normal one.
+        self.meta_model.copy_params_to(model_with_grads)
+        return self.meta_model.model
+
+
 # A helper class that keeps track of meta updates
 # It's done by replacing parameters with variables and applying updates to
 # them.
-
-
 class MetaModel:
 
     def __init__(self, model):
@@ -196,3 +255,4 @@ class MetaModel:
     def copy_params_to(self, model):
         for modelA, modelB in zip(self.model.parameters(), model.parameters()):
             modelB.data.copy_(modelA.data)
+
