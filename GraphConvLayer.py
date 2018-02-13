@@ -89,3 +89,60 @@ class GCN(nn.Module):
         x = F.dropout(x, self.dropout, training=self.training)
         x = F.sigmoid(self.gc3(x, adj))
         return x
+    
+class GraphConvolution_double(Module):
+    """
+    Simple GCN layer, similar to https://arxiv.org/abs/1609.02907
+    """
+    def __init__(self, in_features, out_features, bias=True):
+        super(GraphConvolution_double, self).__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.weight_1 = Parameter(torch.Tensor(in_features, out_features))
+        self.weight_2 = Parameter(torch.Tensor(in_features, out_features))
+        if bias:
+            self.bias = Parameter(torch.Tensor(out_features))
+        else:
+            self.register_parameter('bias', None)
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        stdv = 1. / math.sqrt(self.weight.size(1))
+        self.weight_1.data.uniform_(-stdv, stdv)
+        self.weight_2.data.uniform_(-stdv, stdv)
+        
+        if self.bias is not None:
+            self.bias.data.uniform_(-stdv, stdv)
+
+    def forward(self, input, adj_1, adj_2):
+        support_1 = torch.mm(input, self.weight_1)
+        output_1 = SparseMM()(adj_1, support_1)
+        
+        support_2 = torch.mm(input, self.weight_2)
+        output_2 = SparseMM()(adj_2, support_2)
+        
+        if self.bias is not None:
+            return output_1 + output_2 + self.bias
+        else:
+            return output_1 + output_2
+
+    def __repr__(self):
+        return self.__class__.__name__ + ' (' \
+               + str(self.in_features) + ' -> ' \
+               + str(self.out_features) + ')'
+        
+class GCN_double(nn.Module):
+    def __init__(self, nfeat, nhid, n_output, dropout):
+        super(GCN_double, self).__init__()
+
+        self.gc1 = GraphConvolution_double(nfeat, nhid)
+        self.gc3 = GraphConvolution_double(nhid, 2)
+        self.dropout = dropout
+
+    def forward(self, x, adj_1, adj_2):
+
+        x = F.relu(self.gc1(x, adj_1, adj_2))
+        x = F.dropout(x, self.dropout, training=self.training)
+        x = F.sigmoid(self.gc3(x, adj_1, adj_2))
+        return x
+

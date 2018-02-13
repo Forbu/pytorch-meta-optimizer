@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from data import get_batch
-from meta_optimizer import MetaModel, MetaOptimizer, FastMetaOptimizer
+from meta_optimizer import MetaModel, MetaOptimizer, FastMetaOptimizer, GraphMetaModel_double
 from model import Model
 from torch.autograd import Variable
 from torchvision import datasets, transforms
@@ -22,7 +22,7 @@ parser.add_argument('--truncated_bptt_step', type=int, default=20, metavar='N',
                     help='step at which it truncates bptt (default: 20)')
 parser.add_argument('--updates_per_epoch', type=int, default=10, metavar='N',
                     help='updates per epoch (default: 100)')
-parser.add_argument('--max_epoch', type=int, default=2, metavar='N',
+parser.add_argument('--max_epoch', type=int, default=100, metavar='N',
                     help='number of epoch (default: 10000)')
 parser.add_argument('--hidden_size', type=int, default=10, metavar='N',
                     help='hidden size of the meta optimizer (default: 10)')
@@ -55,10 +55,16 @@ def main():
     # to keep track of the meta updates.
     meta_model = Model()
     
+    # we get the adjacent matrix
+    print("calculating the adjacent matrix of the network")
+    adj_undirected, adjacent_matrix_directed_fw_, adjacent_matrix_directed_bw_ = get_adjacent_matrix(meta_model)
+    adjacent_matrix_directed_fw_ = Variable(adjacent_matrix_directed_fw_)
+    adjacent_matrix_directed_bw_ = Variable(adjacent_matrix_directed_bw_)
+    
     if args.cuda:
         meta_model.cuda()
 
-    meta_optimizer = FastMetaOptimizer(MetaModel(meta_model), args.num_layers, args.hidden_size)
+    meta_optimizer = GraphMetaModel_double(MetaModel(meta_model), args.num_layers, args.hidden_size,dropout=0.2)
     if args.cuda:
         meta_optimizer.cuda()
 
@@ -68,9 +74,8 @@ def main():
         decrease_in_loss = 0.0
         final_loss = 0.0
         train_iter = iter(train_loader)
-        
         for i in range(args.updates_per_epoch):
-            
+
             # Sample a new model
             model = Model()
             if args.cuda:
@@ -95,10 +100,7 @@ def main():
                 if args.cuda:
                     prev_loss = prev_loss.cuda()
                 for j in range(args.truncated_bptt_step):
-                    
-                    
                     x, y = next(train_iter)
-                    
                     if args.cuda:
                         x, y = x.cuda(), y.cuda()
                     x, y = Variable(x), Variable(y)
@@ -111,7 +113,7 @@ def main():
 
                     # Perfom a meta update using gradients from model
                     # and return the current meta model saved in the optimizer
-                    meta_model = meta_optimizer.meta_update(model, loss.data)
+                    meta_model = meta_optimizer.meta_update(model, adjacent_matrix_directed_fw_, adjacent_matrix_directed_bw_)
 
                     # Compute a loss for a step the meta optimizer
                     f_x = meta_model(x)
