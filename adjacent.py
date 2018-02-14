@@ -40,7 +40,7 @@ def normalize(mx):
     return mx
 
 def get_adjacent_matrix(model_input):
-    
+    model_input = Model()
     caract = []
     list_index = []
     
@@ -64,18 +64,16 @@ def get_adjacent_matrix(model_input):
     # creating the matrix
     index_global = 0
     for i, layer_struct in enumerate(caract[:-1]):
-        for input_neuron in range(layer_struct[1]):
-            for output_neuron in range(layer_struct[0]):
-                
+        for output_neuron in range(layer_struct[0]):
+            for input_neuron in range(layer_struct[1]): 
                 for p in range(caract[i+1][1]):
-                    edges.append((index_global,n_size_part[i] + caract[i+1][0]*p + input_neuron))
-                
+                    edges.append((index_global,n_size_part[i] + caract[i+1][1]*input_neuron + p))  
                 index_global += 1
            
         # bias layer
         for input_neuron in range(layer_struct[1]): 
             for p in range(caract[i+1][1]):
-                edges.append((index_global,n_size_part[i] + caract[i+1][0]*p + input_neuron))
+                edges.append((index_global,n_size_part[i] + caract[i+1][1]*input_neuron + p))
             index_global += 1
                 
     G=nx.DiGraph()
@@ -102,7 +100,12 @@ def get_adjacent_matrix(model_input):
     
     adjacent_matrix_directed_bw = normalize(A_directed_bw + sp.eye(A_directed_bw.shape[0]))
     adjacent_matrix_directed_bw_ = sparse_mx_to_torch_sparse_tensor(adjacent_matrix_directed_bw)
-
+    
     return adj_undirected, adjacent_matrix_directed_fw_, adjacent_matrix_directed_bw_
+
+#module
+
+#adj, adj_1, adj_2 = get_adjacent_matrix(model)
+
 
 
