@@ -22,7 +22,7 @@ parser.add_argument('--truncated_bptt_step', type=int, default=20, metavar='N',
                     help='step at which it truncates bptt (default: 20)')
 parser.add_argument('--updates_per_epoch', type=int, default=10, metavar='N',
                     help='updates per epoch (default: 100)')
-parser.add_argument('--max_epoch', type=int, default=2, metavar='N',
+parser.add_argument('--max_epoch', type=int, default=20, metavar='N',
                     help='number of epoch (default: 10000)')
 parser.add_argument('--hidden_size', type=int, default=10, metavar='N',
                     help='hidden size of the meta optimizer (default: 10)')
